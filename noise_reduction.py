@@ -55,6 +55,16 @@ def reduce_noise(input_path, output_path=None, use_gpu=True):
         os.makedirs(output_dir, exist_ok=True)
         audio_file_path = os.path.join(output_dir, "original_audio.wav")
 
+        # Copy original video to output directory
+        original_video_path = os.path.join(output_dir, os.path.basename(input_path))
+        print(f"Copying original video: {input_path} -> {original_video_path}")
+        try:
+            subprocess.run(['cp', input_path, original_video_path], check=True)
+            print(f"Original video copied successfully!")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to copy original video: {e}")
+            # Continue with processing even if copy fails
+
         print(f"Converting video to audio: {input_path} -> {audio_file_path}")
         try:
             # Use shared GPU utility for video-to-audio conversion
@@ -67,6 +77,22 @@ def reduce_noise(input_path, output_path=None, use_gpu=True):
             raise Exception(f"Failed to convert video to audio: {e}")
     else:
         print(f"Input is an audio file, proceeding with noise reduction...")
+
+        # Copy original audio to output directory
+        if output_path is None:  # Only copy for default output path
+            input_name = os.path.splitext(os.path.basename(input_path))[0]
+            data_dir = "data"
+            output_dir = os.path.join(data_dir, input_name)
+            os.makedirs(output_dir, exist_ok=True)
+            original_audio_path = os.path.join(output_dir, os.path.basename(input_path))
+
+            print(f"Copying original audio: {input_path} -> {original_audio_path}")
+            try:
+                subprocess.run(['cp', input_path, original_audio_path], check=True)
+                print(f"Original audio copied successfully!")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to copy original audio: {e}")
+                # Continue with processing even if copy fails
 
     print("Applying noise reduction...")
 
