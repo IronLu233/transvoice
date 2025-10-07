@@ -31,45 +31,6 @@ def find_largest_gap(segments: List[dict]) -> tuple[int, int]:
     return (max_gap, split_index)
 
 
-def merge_chunks_evenly(chunks: List[List[dict]], max_segment_size: int) -> List[List[dict]]:
-    """
-    将递归分割后的chunks进行合并，确保在不超出max_segment_size的前提下，chunks大小尽量均匀
-
-    Args:
-        chunks: 递归分割后的chunks列表
-        max_segment_size: 每个chunk的最大长度
-
-    Returns:
-        List[List[dict]]: 合并后的chunks列表
-    """
-    if not chunks:
-        return []
-
-    # 如果只有一个chunk，直接返回
-    if len(chunks) == 1:
-        return chunks
-
-    merged_chunks = []
-    current_chunk = chunks[0].copy()
-
-    for i in range(1, len(chunks)):
-        next_chunk = chunks[i]
-
-        # 如果当前chunk和下一个chunk合并后不会超过max_segment_size，则合并
-        if len(current_chunk) + len(next_chunk) <= max_segment_size:
-            current_chunk.extend(next_chunk)
-        else:
-            # 否则，保存当前chunk，开始新的chunk
-            merged_chunks.append(current_chunk)
-            current_chunk = next_chunk.copy()
-
-    # 添加最后一个chunk
-    merged_chunks.append(current_chunk)
-
-    print(f"合并chunks: 原来有{len(chunks)}个chunks，大小为{[len(chunk) for chunk in chunks]}")
-    print(f"合并后有{len(merged_chunks)}个chunks，大小为{[len(chunk) for chunk in merged_chunks]}")
-
-    return merged_chunks
 
 
 def split_segments_recursively(segments: List[dict], max_segment_size) -> List[List[dict]]:
@@ -109,16 +70,12 @@ def split_segments_recursively(segments: List[dict], max_segment_size) -> List[L
     left_chunks = split_segments_recursively(left_part, max_segment_size)
     right_chunks = split_segments_recursively(right_part, max_segment_size)
 
-    # 合并结果
+    # 合并结果，直接返回，不进行额外合并
     all_chunks = left_chunks + right_chunks
-
-    # 对递归分割后的chunks进行合并，确保大小尽量均匀
-    merged_chunks = merge_chunks_evenly(all_chunks, max_segment_size)
-
-    return merged_chunks
+    return all_chunks
 
 
-def merge_segments_with_qwen_max(segments: List[dict], api_key: str, max_segment_size: int = 200) -> List[dict]:
+def merge_segments_with_qwen_max(segments: List[dict], api_key: str, max_segment_size: int = 150) -> List[dict]:
     """
     使用qwen-turbo对segments进行语义合并，返回合并后的段落
     为防止超时，使用递归分割算法将大段分割成小段
@@ -385,6 +342,7 @@ journaling = 交易日志
 - 数字用大写的中文表示：零、壹、贰、叁、肆、伍、陆、柒、捌、玖、拾、佰、仟、万、亿
 - 尽量保证翻译后的中文阅读时长与英文原文一致，可通过调整语言简洁程度来实现
 - Ok, Okay尽量翻译成"好"，而不是"好的"
+- 翻译货币对时，比如EUR/USD，中间的斜杠(/)翻译成“兑”，举例说：“EUR/USD”翻译成欧元兑美元
 
 英文段落：
 {original_text}

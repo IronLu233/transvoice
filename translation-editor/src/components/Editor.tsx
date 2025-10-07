@@ -28,6 +28,7 @@ export default function Editor({ fileId }: EditorProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [originalTexts, setOriginalTexts] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   useEffect(() => {
@@ -49,6 +50,14 @@ export default function Editor({ fileId }: EditorProps) {
       setLoading(true);
       const response = await fetch(`/api/file/${fileId}`);
       const result = await response.json();
+
+      // Check for invalid segments in the original data
+      const invalidSegments = result.data.segments.filter((seg: Segment) => seg.start > seg.end);
+      if (invalidSegments.length > 0) {
+        console.error('Invalid segments found in original data:', invalidSegments);
+        alert(`警告：原始数据中发现 ${invalidSegments.length} 个时间戳错误的段落（start > end）！`);
+      }
+
       const processedData = {
         ...result.data,
         segments: result.data.segments.map((segment: Segment) => ({
@@ -131,6 +140,23 @@ export default function Editor({ fileId }: EditorProps) {
       setTimeout(() => {
         adjustTextareaHeight(textareaRefs.current[segmentIndex]);
       }, 0);
+    }
+  };
+
+  const deleteSegment = (segmentIndex: number) => {
+    if (data && data.segments.length > 1) {
+      const newData = { ...data };
+      newData.segments = newData.segments.filter((_, index) => index !== segmentIndex);
+      newData.total_segments = newData.segments.length;
+      setData(newData);
+
+      // Also remove from originalTexts
+      const newOriginalTexts = [...originalTexts];
+      newOriginalTexts.splice(segmentIndex, 1);
+      setOriginalTexts(newOriginalTexts);
+
+      // Update textarea refs
+      textareaRefs.current = textareaRefs.current.filter((_, index) => index !== segmentIndex);
     }
   };
 
@@ -283,13 +309,27 @@ export default function Editor({ fileId }: EditorProps) {
 
             <div className="mb-4">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium px-3 py-1 rounded-full" style={{
-                  background: 'var(--gradient-info)',
-                  color: 'white',
-                  boxShadow: 'var(--shadow-sm)'
-                }}>
-                  ⏱️ {formatTime(segment.start)} - {formatTime(segment.end)}
-                </span>
+                <div className="flex items-center space-x-2">
+                  {segment.start > segment.end && (
+                    <div className="flex items-center text-xs px-2 py-1 rounded-md" style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#f87171'
+                    }}>
+                      <span className="mr-1">⚠️</span>
+                      <span>时间戳异常</span>
+                    </div>
+                  )}
+                  <span className="text-xs font-medium px-3 py-1 rounded-full" style={{
+                    background: segment.start > segment.end
+                      ? 'linear-gradient(145deg, #f87171, #ef4444)'
+                      : 'var(--gradient-info)',
+                    color: 'white',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}>
+                    ⏱️ {formatTime(segment.start)} - {formatTime(segment.end)}
+                  </span>
+                </div>
                 <span className="text-xs font-medium" style={{
                   color: 'var(--text-accent)',
                   opacity: 0.8
@@ -297,6 +337,23 @@ export default function Editor({ fileId }: EditorProps) {
                   段落 {index + 1}
                 </span>
               </div>
+              {segment.start > segment.end && (
+                <div className="p-3 rounded-lg text-xs" style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  color: '#dc2626',
+                  borderRadius: '8px'
+                }}>
+                  <div className="flex items-start">
+                    <span className="mr-2">📍</span>
+                    <div>
+                      <div className="font-medium mb-1">时间戳检测到异常</div>
+                      <div>开始时间 ({segment.start}ms) 晚于结束时间 ({segment.end}ms)</div>
+                      <div className="mt-1 text-xs opacity-75">这可能是ASR模型识别造成的异常，建议检查或删除此段落</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mb-4">
@@ -353,27 +410,51 @@ export default function Editor({ fileId }: EditorProps) {
                   }}
                 />
                 <div className="mt-3 flex items-center justify-between">
-                  <button
-                    onClick={() => resetSegment(index)}
-                    className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow hover:scale-105"
-                    style={{
-                      background: 'var(--gradient-secondary)',
-                      boxShadow: 'var(--shadow-sm)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                    }}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <span>🔄</span>
-                      <span>复位</span>
-                    </div>
-                  </button>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => resetSegment(index)}
+                      className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow hover:scale-105"
+                      style={{
+                        background: 'var(--gradient-secondary)',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                      }}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span>🔄</span>
+                        <span>复位</span>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => deleteSegment(index)}
+                      className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow hover:scale-105"
+                      style={{
+                        background: 'linear-gradient(145deg, #ef4444, #dc2626)',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
+                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                      }}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span>🗑️</span>
+                        <span>删除</span>
+                      </div>
+                    </button>
+                  </div>
 
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {segment.translated_text.split('\n').filter(line => line.trim()).length} 行
