@@ -1,0 +1,7 @@
+__pycache__
+audio_segments
+outputs
+.env
+data
+*.log
+tmp

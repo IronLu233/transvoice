@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+:root {
+  /* Light theme colors */
+  --background: #ffffff;
+  --foreground: #171717;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark theme colors - eye-friendly */
+    --background: #1a1a1a;
+    --foreground: #e5e5e5;
+    --card-bg: #242424;
+    --card-border: #404040;
+    --input-bg: #2d2d2d;
+    --input-border: #525252;
+    --text-secondary: #a3a3a3;
+    --text-muted: #737373;
+  }
+}
+
+/* Force dark mode for better eye comfort */
+* {
+  color-scheme: dark;
+}
+
+:root {
+  /* Rich dark theme with vibrant accents */
+  --background: #0f0f23;
+  --background-secondary: #1a1a2e;
+  --foreground: #e8e8f0;
+  --card-bg: linear-gradient(145deg, #16213e 0%, #0f3460 100%);
+  --card-bg-solid: #1e3a5f;
+  --card-border: #3d5a80;
+  --input-bg: #2d3748;
+  --input-border: #4a5568;
+  --input-bg-hover: #374151;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  /* Rich accent colors */
+  --accent-primary: #5b86e5;
+  --accent-primary-hover: #4a7bd8;
+  --accent-primary-light: #7c9ce6;
+  --accent-secondary: #ff6b6b;
+  --accent-secondary-hover: #ff5252;
+  --accent-success: #48bb78;
+  --accent-warning: #f6ad55;
+  --accent-info: #4299e1;
+
+  /* Gradient backgrounds */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-success: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  --gradient-dark: linear-gradient(145deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+
+  /* Shadow colors */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(91, 134, 229, 0.3);
+
+  /* Text colors with more personality */
+  --text-primary: #f7fafc;
+  --text-accent: #81e6d9;
+  --text-warning: #fbd38d;
+  --text-error: #fc8181;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--gradient-dark);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Animated background gradient */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+body {
+  background: linear-gradient(-45deg, #0f0f23, #1a1a2e, #16213e, #0f3460);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 15, 35, 0.8);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(145deg, #3d5a80, #4a7bd8);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(145deg, #4a7bd8, #5b86e5);
+}
+
+/* Better focus styles */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px rgba(91, 134, 229, 0.3);
+}
+
+/* Button animations */
+.btn-glow {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-glow:hover::before {
+  left: 100%;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+/* Text selection */
+::selection {
+  background: var(--accent-primary);
+  color: white;
+}
+
+::-moz-selection {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* Pulse animation for loading */
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.pulse-animation {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
