@@ -4,10 +4,10 @@ import path from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const fileId = params.id;
+    const { id: fileId } = await params;
     const filePath = path.join(process.cwd(), '..', 'data', fileId, 'denoised_translated_results.json');
 
     const fileContent = await fs.readFile(filePath, 'utf-8');
@@ -22,10 +22,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const fileId = params.id;
+    const { id: fileId } = await params;
     const filePath = path.join(process.cwd(), '..', 'data', fileId, 'denoised_translated_results.json');
 
     const data = await request.json();

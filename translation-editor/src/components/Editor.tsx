@@ -29,6 +29,7 @@ export default function Editor({ fileId }: EditorProps) {
   const [saving, setSaving] = useState(false);
   const [originalTexts, setOriginalTexts] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const textareaRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function Editor({ fileId }: EditorProps) {
       const invalidSegments = result.data.segments.filter((seg: Segment) => seg.start > seg.end);
       if (invalidSegments.length > 0) {
         console.error('Invalid segments found in original data:', invalidSegments);
-        alert(`警告：原始数据中发现 ${invalidSegments.length} 个时间戳错误的段落（start > end）！`);
+        showToast(`警告：原始数据中发现 ${invalidSegments.length} 个时间戳错误的段落（start > end）！`, 'warning');
       }
 
       const processedData = {
@@ -98,13 +99,13 @@ export default function Editor({ fileId }: EditorProps) {
       });
 
       if (response.ok) {
-        alert('保存成功！');
+        showToast('保存成功！', 'success');
       } else {
-        alert('保存失败！');
+        showToast('保存失败！', 'error');
       }
     } catch (error) {
       console.error('Error saving data:', error);
-      alert('保存失败！');
+      showToast('保存失败！', 'error');
     } finally {
       setSaving(false);
     }
@@ -127,18 +128,45 @@ export default function Editor({ fileId }: EditorProps) {
 
   const handleTextareaChange = (segmentIndex: number, value: string) => {
     updateSegmentText(segmentIndex, value);
-    // Adjust height after state update
+    // Adjust height after state update, but prevent unwanted scrolling
     setTimeout(() => {
-      adjustTextareaHeight(textareaRefs.current[segmentIndex]);
+      const textarea = textareaRefs.current[segmentIndex];
+      if (textarea) {
+        // Store current scroll position
+        const scrollY = window.scrollY;
+        const rect = textarea.getBoundingClientRect();
+        const isInViewport = rect.top >= 0 && rect.bottom <= window.innerHeight;
+
+        adjustTextareaHeight(textarea);
+
+        // Only restore scroll position if the textarea was in viewport
+        // and the height change would cause unwanted scrolling
+        if (isInViewport) {
+          window.scrollTo(0, scrollY);
+        }
+      }
     }, 0);
   };
 
   const resetSegment = (segmentIndex: number) => {
     if (originalTexts[segmentIndex]) {
       updateSegmentText(segmentIndex, originalTexts[segmentIndex]);
-      // Adjust height after reset
+      // Adjust height after reset, but prevent unwanted scrolling
       setTimeout(() => {
-        adjustTextareaHeight(textareaRefs.current[segmentIndex]);
+        const textarea = textareaRefs.current[segmentIndex];
+        if (textarea) {
+          // Store current scroll position
+          const scrollY = window.scrollY;
+          const rect = textarea.getBoundingClientRect();
+          const isInViewport = rect.top >= 0 && rect.bottom <= window.innerHeight;
+
+          adjustTextareaHeight(textarea);
+
+          // Only restore scroll position if the textarea was in viewport
+          if (isInViewport) {
+            window.scrollTo(0, scrollY);
+          }
+        }
       }, 0);
     }
   };
@@ -158,6 +186,92 @@ export default function Editor({ fileId }: EditorProps) {
       // Update textarea refs
       textareaRefs.current = textareaRefs.current.filter((_, index) => index !== segmentIndex);
     }
+  };
+
+  const mergeWithSegment = (currentIndex: number, targetIndex: number) => {
+    if (!data || targetIndex < 0 || targetIndex >= data.segments.length) {
+      return;
+    }
+
+    const currentSegment = data.segments[currentIndex];
+    const targetSegment = data.segments[targetIndex];
+
+    // Determine the new start and end times
+    const newStart = Math.min(currentSegment.start, targetSegment.start);
+    const newEnd = Math.max(currentSegment.end, targetSegment.end);
+
+    // Merge the translated texts
+    const currentText = currentSegment.translated_text;
+    const targetText = targetSegment.translated_text;
+    const mergedText = currentIndex < targetIndex
+      ? `${currentText}\n${targetText}`
+      : `${targetText}\n${currentText}`;
+
+    // Merge original texts
+    const currentOriginalText = currentSegment.original_text;
+    const targetOriginalText = targetSegment.original_text;
+    const mergedOriginalText = currentIndex < targetIndex
+      ? `${currentOriginalText} ${targetOriginalText}`
+      : `${targetOriginalText} ${currentOriginalText}`;
+
+    // Merge original_segments arrays
+    const mergedOriginalSegments = currentIndex < targetIndex
+      ? [...currentSegment.original_segments, ...targetSegment.original_segments]
+      : [...targetSegment.original_segments, ...currentSegment.original_segments];
+
+    // Create the merged segment
+    const mergedSegment: Segment = {
+      start: newStart,
+      end: newEnd,
+      original_text: mergedOriginalText,
+      translated_text: mergedText,
+      original_segments: mergedOriginalSegments
+    };
+
+    // Create new segments array
+    const newSegments = [...data.segments];
+
+    // Remove both segments and add the merged one
+    const indicesToRemove = [currentIndex, targetIndex].sort((a, b) => b - a); // Sort descending to remove correctly
+    indicesToRemove.forEach(index => {
+      newSegments.splice(index, 1);
+    });
+
+    // Insert merged segment at the lower index
+    const insertIndex = Math.min(currentIndex, targetIndex);
+    newSegments.splice(insertIndex, 0, mergedSegment);
+
+    // Update the data
+    const newData = {
+      ...data,
+      segments: newSegments,
+      total_segments: newSegments.length
+    };
+    setData(newData);
+
+    // Update originalTexts array
+    const newOriginalTexts = [...originalTexts];
+    const originalTextsToRemove = [currentIndex, targetIndex].sort((a, b) => b - a);
+    originalTextsToRemove.forEach(index => {
+      newOriginalTexts.splice(index, 1);
+    });
+    newOriginalTexts.splice(insertIndex, 0, mergedText);
+    setOriginalTexts(newOriginalTexts);
+  };
+
+  const mergeUp = (segmentIndex: number) => {
+    mergeWithSegment(segmentIndex, segmentIndex - 1);
+  };
+
+  const mergeDown = (segmentIndex: number) => {
+    mergeWithSegment(segmentIndex, segmentIndex + 1);
+  };
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
   };
 
   // Adjust all textareas heights when data loads
@@ -204,10 +318,92 @@ export default function Editor({ fileId }: EditorProps) {
   }
 
   return (
-    <div className="flex-1 p-8 h-screen overflow-y-auto" style={{
-      background: 'transparent',
-      backdropFilter: 'blur(5px)'
-    }}>
+    <>
+      {/* Fixed elements that should always be visible */}
+      {toast && (
+        <div
+          className="fixed top-4 right-4 z-50"
+          style={{
+            position: 'fixed',
+            top: '1rem',
+            right: '1rem',
+            zIndex: 50,
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <div
+            className="px-6 py-3 rounded-lg shadow-lg text-white flex items-center space-x-2"
+            style={{
+              background: toast.type === 'success'
+                ? 'linear-gradient(145deg, #10b981, #059669)'
+                : toast.type === 'error'
+                ? 'linear-gradient(145deg, #ef4444, #dc2626)'
+                : 'linear-gradient(145deg, #f59e0b, #d97706)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+            }}
+          >
+            <span className="text-lg">
+              {toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : '⚠️'}
+            </span>
+            <span className="font-medium">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Fixed floating save button */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          zIndex: 40
+        }}
+      >
+        <button
+          onClick={saveData}
+          disabled={saving}
+          className="px-6 py-3 rounded-xl text-white font-medium transition-all duration-300 btn-glow shadow-lg"
+          style={{
+            background: saving
+              ? 'linear-gradient(145deg, #6b7280, #9ca3af)'
+              : 'var(--gradient-success)',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3), 0 4px 10px rgba(0, 0, 0, 0.2)',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            opacity: saving ? 0.8 : 1,
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}
+        >
+          {saving ? (
+            <div className="flex items-center space-x-2">
+              <div style={{
+                width: '16px',
+                height: '16px',
+                border: '2px solid transparent',
+                borderTop: '2px solid white',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></div>
+              <span>保存中...</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <span>💾</span>
+              <span>保存</span>
+            </div>
+          )}
+        </button>
+      </div>
+
+      {/* Main scrollable content */}
+      <div className="flex-1 p-8" style={{
+        height: '100vh',
+        overflowY: 'auto',
+        background: 'transparent',
+        backdropFilter: 'blur(5px)'
+      }}>
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -237,9 +433,7 @@ export default function Editor({ fileId }: EditorProps) {
           <button
             onClick={saveData}
             disabled={saving}
-            className={`px-8 py-3 rounded-xl text-white font-medium transition-all duration-300 btn-glow ${
-              saving ? 'pulse-animation' : 'hover:scale-105'
-            }`}
+            className="px-8 py-3 rounded-xl text-white font-medium transition-all duration-300 btn-glow"
             style={{
               background: saving
                 ? 'linear-gradient(145deg, #6b7280, #9ca3af)'
@@ -247,18 +441,6 @@ export default function Editor({ fileId }: EditorProps) {
               boxShadow: saving ? 'var(--shadow-sm)' : 'var(--shadow-md)',
               cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.7 : 1
-            }}
-            onMouseEnter={(e) => {
-              if (!saving) {
-                e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!saving) {
-                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-              }
             }}
           >
             {saving ? (
@@ -286,7 +468,7 @@ export default function Editor({ fileId }: EditorProps) {
       <div className="space-y-6">
         {data.segments.map((segment, index) => (
           <div
-            key={index}
+            key={`${segment.start}-${segment.end}`}
             className="rounded-xl p-6 card-hover"
             style={{
               background: `linear-gradient(145deg, ${index % 4 === 0 ? '#1e3a5f' : index % 4 === 1 ? '#2b4c7e' : index % 4 === 2 ? '#374151' : '#2d3748'}, ${index % 4 === 0 ? '#2d5a8b' : index % 4 === 1 ? '#3768a8' : index % 4 === 2 ? '#4b5563' : '#374151'})`,
@@ -400,31 +582,19 @@ export default function Editor({ fileId }: EditorProps) {
                   }}
                   onFocus={(e) => {
                     e.target.style.borderColor = 'var(--accent-primary)';
-                    e.target.style.boxShadow = `0 0 0 3px ${getComputedStyle(document.documentElement).getPropertyValue('--accent-primary')}30, 0 0 20px ${getComputedStyle(document.documentElement).getPropertyValue('--accent-primary')}20`;
-                    e.target.style.backgroundColor = 'rgba(15, 15, 35, 0.95)';
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = 'var(--input-border)';
-                    e.target.style.boxShadow = 'none';
-                    e.target.style.backgroundColor = 'rgba(15, 15, 35, 0.8)';
                   }}
                 />
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => resetSegment(index)}
-                      className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow hover:scale-105"
+                      className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow"
                       style={{
                         background: 'var(--gradient-secondary)',
                         boxShadow: 'var(--shadow-sm)'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                       }}
                     >
                       <div className="flex items-center space-x-2">
@@ -434,19 +604,49 @@ export default function Editor({ fileId }: EditorProps) {
                     </button>
 
                     <button
+                      onClick={() => mergeUp(index)}
+                      disabled={index === 0}
+                      className={`px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow ${
+                        index === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      style={{
+                        background: index === 0
+                          ? 'linear-gradient(145deg, #6b7280, #9ca3af)'
+                          : 'linear-gradient(145deg, #3b82f6, #2563eb)',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span>⬆️</span>
+                        <span>向上合并</span>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => mergeDown(index)}
+                      disabled={index === data.segments.length - 1}
+                      className={`px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow ${
+                        index === data.segments.length - 1 ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      style={{
+                        background: index === data.segments.length - 1
+                          ? 'linear-gradient(145deg, #6b7280, #9ca3af)'
+                          : 'linear-gradient(145deg, #10b981, #059669)',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span>⬇️</span>
+                        <span>向下合并</span>
+                      </div>
+                    </button>
+
+                    <button
                       onClick={() => deleteSegment(index)}
-                      className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow hover:scale-105"
+                      className="px-5 py-2 text-white text-sm font-medium rounded-lg transition-all duration-300 btn-glow"
                       style={{
                         background: 'linear-gradient(145deg, #ef4444, #dc2626)',
                         boxShadow: 'var(--shadow-sm)'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
                       }}
                     >
                       <div className="flex items-center space-x-2">
@@ -466,13 +666,38 @@ export default function Editor({ fileId }: EditorProps) {
         ))}
       </div>
 
-      {/* Add spin animation */}
+      {/* Close main content div */}
+      </div>
+
+      {/* Add animations */}
       <style jsx>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+
+        @keyframes slideIn {
+          0% {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          100% {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        @keyframes slideOut {
+          0% {
+            transform: translateX(0);
+            opacity: 1;
+          }
+          100% {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+        }
       `}</style>
-    </div>
+    </>
   );
 }

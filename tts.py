@@ -111,7 +111,7 @@ def tts_from_translated_json(json_file_path, reference_audio_path, output_dir=No
                 param_20=0,
                 param_21=3,
                 param_22=10,
-                param_23=1500,
+                param_23=1815,
                 api_name="/gen_single"
             )
 

@@ -211,6 +211,39 @@ def get_audio_duration(audio_file: str) -> float:
         print(f"警告: 无法获取音频时长 {audio_file}: {e}")
         return 0.0
 
+def cleanup_invalid_cache(segment_dir: Path, valid_tts_files: List[str]) -> None:
+    """
+    清理失效的缓存文件，只保留当前TTS文件列表中有效的片段
+
+    Args:
+        segment_dir: 片段存储目录
+        valid_tts_files: 当前有效的TTS文件列表
+    """
+    if not segment_dir.exists():
+        return
+
+    # 创建当前TTS文件对应的片段文件名集合
+    expected_segments = set()
+    for i, tts_file in enumerate(valid_tts_files):
+        segment_filename = f"segment_{i+1:02d}_{Path(tts_file).stem}.mp4"
+        expected_segments.add(segment_filename)
+
+    # 检查现有片段文件，删除不在期望集合中的文件
+    deleted_count = 0
+    for segment_file in segment_dir.glob("segment_*.mp4"):
+        if segment_file.name not in expected_segments:
+            try:
+                segment_file.unlink()
+                print(f"  🗑️  删除失效缓存: {segment_file.name}")
+                deleted_count += 1
+            except Exception as e:
+                print(f"  ⚠️  删除缓存文件失败 {segment_file.name}: {e}")
+
+    if deleted_count > 0:
+        print(f"  ✅ 清理完成，删除了 {deleted_count} 个失效缓存文件")
+    else:
+        print(f"  ✅ 没有需要清理的失效缓存")
+
 def synthesize_video_with_tts(video_file: str, tts_dir: str, output_file: str, use_gpu: bool = False, debug_export: bool = False):
     """
     使用TTS音频合成视频 - 根据音频时长动态调整视频片段速度
@@ -314,6 +347,16 @@ def synthesize_video_with_tts(video_file: str, tts_dir: str, output_file: str, u
                 # 导出带音频的视频片段到磁盘（必须写入磁盘，否则后续合成会丢失音频）
                 segment_filename = f"segment_{i+1:02d}_{Path(tts_file).stem}.mp4"
                 segment_path = segment_dir / segment_filename
+
+                # 检查缓存：如果片段文件已存在且有效，则跳过生成
+                if segment_path.exists():
+                    print(f"      💾 片段文件已存在，跳过生成: {segment_path}")
+                    # 验证现有文件的有效性（检查文件大小和基本完整性）
+                    if segment_path.stat().st_size > 0:
+                        print(f"      ✅ 使用缓存的片段文件: {segment_path}")
+                        continue
+                    else:
+                        print(f"      ⚠️  缓存文件无效，重新生成: {segment_path}")
 
                 try:
                     final_segment.write_videofile(
@@ -467,16 +510,12 @@ def synthesize_video_with_tts(video_file: str, tts_dir: str, output_file: str, u
 
             print(f"✅ 最终视频替换成功: {output_file}")
 
-            # 清理临时片段文件（如果debug_export=False）
-            if not debug_export and segment_dir.exists():
-                try:
-                    import shutil
-                    shutil.rmtree(segment_dir)
-                    print(f"🗑️  已清理临时片段目录: {segment_dir}")
-                except Exception as cleanup_error:
-                    print(f"⚠️  清理临时目录失败: {cleanup_error}")
+            # 清理失效的缓存文件
+            if not debug_export:
+                print(f"\n🧹 清理失效的缓存文件...")
+                cleanup_invalid_cache(segment_dir, valid_tts_files)
             else:
-                print(f"💾 保留调试片段目录: {segment_dir}")
+                print(f"\n💾 调试模式：保留所有片段文件: {segment_dir}")
 
             return True
 

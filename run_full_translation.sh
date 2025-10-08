@@ -15,7 +15,6 @@ if [ $# -eq 0 ]; then
 fi
 
 INPUT_FILE="$1"
-REFERENCE_AUDIO="/home/iron/transvoice2/data/ICT-ref.WAV"
 
 # 检查输入文件是否存在
 if [ ! -f "$INPUT_FILE" ]; then
@@ -23,16 +22,10 @@ if [ ! -f "$INPUT_FILE" ]; then
     exit 1
 fi
 
-# 检查参考音频文件是否存在
-if [ ! -f "$REFERENCE_AUDIO" ]; then
-    echo "错误: 参考音频文件不存在: $REFERENCE_AUDIO"
-    exit 1
-fi
 
 echo "========================================"
 echo "视频翻译完整流程开始"
 echo "输入文件: $INPUT_FILE"
-echo "参考音频: $REFERENCE_AUDIO"
 echo "开始时间: $(date)"
 echo "========================================"
 
@@ -104,7 +97,7 @@ echo ""
 echo "========================================"
 echo "步骤4: TTS语音合成 (tts.py)"
 echo "========================================"
-python tts.py "$TRANSLATED_RESULTS" "$REFERENCE_AUDIO"
+python tts.py "$TRANSLATED_RESULTS"
 if [ $? -ne 0 ]; then
     echo "错误: TTS语音合成失败"
     exit 1
@@ -121,21 +114,23 @@ echo "✅ 步骤4完成: TTS语音合成成功"
 echo "输出目录: $TTS_OUTPUT_DIR"
 echo "生成的音频文件数量: $TTS_FILE_COUNT"
 
-# 步骤5: 视频音频合并
+# 步骤5: 视频音频合成
 echo ""
 echo "========================================"
-echo "步骤5: 视频音频合并 (video_processor.py)"
+echo "步骤5: 视频音频合成 (video_synthesizer.py)"
 echo "========================================"
-python video_processor.py "$INPUT_FILE" "$TTS_OUTPUT_DIR"
+python video_synthesizer.py "$INPUT_FILE" --tts-dir "$TTS_OUTPUT_DIR"
 if [ $? -ne 0 ]; then
-    echo "错误: 视频音频合并失败"
+    echo "错误: 视频音频合成失败"
     exit 1
 fi
 
 # 查找最终输出文件
-FINAL_OUTPUT=$(find "$DATA_DIR" -name "*_final.mp4" -o -name "*_final.webm" | head -1)
-if [ -z "$FINAL_OUTPUT" ]; then
-    # 如果没找到final文件，查找最新的视频文件
+# video_synthesizer.py 输出文件格式为: 原文件名_synthesized.mp4
+INPUT_BASENAME=$(basename "$INPUT_FILE" | sed 's/\.[^.]*$//')
+FINAL_OUTPUT="$DATA_DIR/${INPUT_BASENAME}_synthesized.mp4"
+if [ ! -f "$FINAL_OUTPUT" ]; then
+    # 如果没找到synthesized文件，查找最新的视频文件
     FINAL_OUTPUT=$(find "$DATA_DIR" -name "*.mp4" -o -name "*.webm" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
 fi
 
