@@ -282,7 +282,20 @@ def synthesize_video_with_tts(video_file: str, tts_dir: str, output_file: str, u
 
         output_path = Path(output_file)
         segment_dir = output_path.parent / "segments"
+
+        # 删除整个segments目录以清除所有缓存
+        if segment_dir.exists():
+            print(f"🗑️  删除现有segments目录: {segment_dir}")
+            import shutil
+            try:
+                shutil.rmtree(segment_dir)
+                print(f"✅ 已删除segments目录及其所有内容")
+            except Exception as e:
+                print(f"⚠️  删除segments目录失败: {e}")
+
+        # 创建新的segments目录
         segment_dir.mkdir(exist_ok=True)
+        print(f"📁 创建新的segments目录: {segment_dir}")
 
         for i, tts_file in enumerate(valid_tts_files):
             print(f"\n📁 处理第 {i+1}/{len(valid_tts_files)} 个TTS文件: {Path(tts_file).name}")
@@ -347,16 +360,6 @@ def synthesize_video_with_tts(video_file: str, tts_dir: str, output_file: str, u
                 # 导出带音频的视频片段到磁盘（必须写入磁盘，否则后续合成会丢失音频）
                 segment_filename = f"segment_{i+1:02d}_{Path(tts_file).stem}.mp4"
                 segment_path = segment_dir / segment_filename
-
-                # 检查缓存：如果片段文件已存在且有效，则跳过生成
-                if segment_path.exists():
-                    print(f"      💾 片段文件已存在，跳过生成: {segment_path}")
-                    # 验证现有文件的有效性（检查文件大小和基本完整性）
-                    if segment_path.stat().st_size > 0:
-                        print(f"      ✅ 使用缓存的片段文件: {segment_path}")
-                        continue
-                    else:
-                        print(f"      ⚠️  缓存文件无效，重新生成: {segment_path}")
 
                 try:
                     final_segment.write_videofile(
